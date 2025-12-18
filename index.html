@@ -1,0 +1,1517 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>[KSMS APPS] 교우관계 분석 시스템</title>
+  <link rel="stylesheet" href="https://unpkg.com/vis-network/styles/vis-network.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --accent: #10B981;
+      --danger: #EF4444;
+      --bg-main: #F9FAFB;
+      --bg-card: #FFFFFF;
+      --text-primary: #111827;
+      --text-secondary: #6B7280;
+      --border: #E5E7EB;
+      --male-color: #5B8DEE;
+      --female-color: #E879B9;
+      --positive-color: #34D399;
+      --negative-color: #F87171;
+      --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.06);
+      --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      flex-shrink: 0;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-bottom: 1px solid #2a2a4e;
+      padding: 24px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: -0.5px;
+    }
+
+    header h1 span {
+      font-size: 13px;
+      font-weight: 400;
+      color: rgba(255, 255, 255, 0.6);
+      margin-left: 16px;
+      letter-spacing: 0;
+    }
+
+    .fullscreen-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: #FFFFFF;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      backdrop-filter: blur(10px);
+    }
+
+    .fullscreen-btn:hover {
+      background: rgba(255, 255, 255, 0.95);
+      color: #1a1a2e;
+      border-color: rgba(255, 255, 255, 0.95);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+    }
+
+    main {
+      flex: 1;
+      /* **수정: 3분할 레이아웃 (좌측 패널 350px, 가운데 네트워크 1fr, 우측 패널 380px)** */
+      display: grid;
+      grid-template-columns: 350px 1fr 380px; 
+      gap: 24px;
+      padding: 24px;
+      height: calc(100vh - 96px);
+      overflow: hidden;
+    }
+    
+    /* 좌측 학생 상세 정보 패널 스타일 */
+    .detail-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      height: 100%;
+      transition: box-shadow 0.3s ease;
+    }
+    
+    .detail-panel:hover {
+      box-shadow: var(--shadow-hover);
+    }
+    
+    .detail-panel .panel-section {
+        border-bottom: none;
+        padding: 24px;
+    }
+    
+    .detail-panel #studentInfoCard {
+        padding: 0; /* 프로필 카드가 이미 패딩을 가지고 있으므로 제거 */
+        border: none;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    .graph-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: box-shadow 0.3s ease;
+    }
+
+    .graph-card:hover {
+      box-shadow: var(--shadow-hover);
+    }
+
+    .graph-header {
+      padding: 20px 24px;
+      border-bottom: 2px solid #F3F4F6;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+      background: linear-gradient(to right, #F9FAFB, #FFFFFF);
+      letter-spacing: -0.3px;
+    }
+
+    .graph-body {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #network {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        radial-gradient(circle at 20% 80%, rgba(79, 70, 229, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
+        linear-gradient(to bottom, #FAFAFA, #F5F5F7);
+    }
+
+    .side-panel {
+      /* 우측 제어/통계 패널 스타일 (기존과 동일) */
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      height: 100%;
+      transition: box-shadow 0.3s ease;
+    }
+
+    .side-panel:hover {
+      box-shadow: var(--shadow-hover);
+    }
+
+    .side-panel::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .side-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .side-panel::-webkit-scrollbar-thumb {
+      background: #D1D5DB;
+      border-radius: 4px;
+    }
+
+    .side-panel::-webkit-scrollbar-thumb:hover {
+      background: #9CA3AF;
+    }
+
+    .panel-section {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .panel-section:last-child { border-bottom: none; }
+
+    .panel-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+
+    .btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+    }
+
+    .btn.secondary {
+      background: white;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+    }
+
+    .btn.secondary:hover {
+      background: var(--primary);
+      color: white;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(79, 70, 229, 0.3);
+    }
+
+    label { 
+      font-size: 13px; 
+      color: var(--text-secondary); 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: color 0.2s ease;
+      user-select: none;
+    }
+
+    label:hover {
+      color: var(--text-primary);
+    }
+
+    input[type="checkbox"] { 
+      width: 18px; 
+      height: 18px; 
+      accent-color: var(--primary);
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    input[type="checkbox"]:hover {
+      transform: scale(1.1);
+    }
+
+    input[type="file"] { display: none; }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
+      padding: 12px 8px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid #E5E7EB;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: default;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(79, 70, 229, 0.15);
+      border-color: var(--primary);
+    }
+
+    .stat-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .stat-icon {
+      font-size: 20px;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .stat-value { 
+      font-size: 24px; 
+      font-weight: 800; 
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+
+    .stat-label { 
+      font-size: 10px; 
+      color: var(--text-secondary); 
+      text-transform: uppercase; 
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .profile-card {
+      background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
+      border-radius: 14px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+    }
+
+    .profile-card:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .profile-card h3 { 
+      font-size: 17px; 
+      margin-bottom: 12px; 
+      font-weight: 700; 
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gender-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .gender-badge.male {
+      background: rgba(91, 141, 238, 0.15);
+      color: var(--male-color);
+    }
+
+    .gender-badge.female {
+      background: rgba(232, 121, 185, 0.15);
+      color: var(--female-color);
+    }
+
+    .connection-count-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 6px;
+    }
+
+    .evaluation-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .evaluation-card {
+      background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .evaluation-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      border-color: var(--primary);
+    }
+
+    .evaluation-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .evaluation-count {
+      background: var(--primary);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .profile-card ul {
+      margin-top: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .profile-card li {
+      padding: 6px 0;
+      border-bottom: 1px solid #F3F4F6;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .profile-card li:last-child {
+      border-bottom: none;
+    }
+
+    .error-message {
+      background: linear-gradient(135deg, #FEE2E2, #FECACA);
+      color: #991B1B;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-top: 10px;
+      border: 1px solid #FCA5A5;
+      animation: slideIn 0.3s ease;
+    }
+
+    .success-message {
+      background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+      color: #065F46;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-top: 10px;
+      border: 1px solid #6EE7B7;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #E5E7EB;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 반응형 디자인 */
+    @media (max-width: 1300px) {
+      main {
+        /* 화면이 좁아지면 상세 정보 패널을 우측 패널 위에 쌓음 */
+        grid-template-columns: 1fr 380px;
+        grid-template-rows: 1fr auto; /* 네트워크 1fr, 패널 auto */
+      }
+      
+      .detail-panel {
+        /* 상세 정보 패널을 우측 패널과 합쳐서 아래쪽에 배치 */
+        grid-column: 2 / 3;
+        grid-row: 2 / 3;
+        max-height: 400px;
+        flex-direction: row;
+        gap: 0;
+        overflow-x: auto;
+      }
+      
+      .detail-panel .panel-section {
+          flex-shrink: 0;
+          min-width: 320px;
+          border-right: 1px solid var(--border);
+          border-bottom: none;
+      }
+
+      .graph-card {
+        grid-column: 1 / 3;
+        grid-row: 1 / 2;
+      }
+
+      .side-panel {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+        max-height: 400px;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .evaluation-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      header {
+        padding: 16px 20px;
+      }
+
+      header h1 {
+        font-size: 18px;
+      }
+
+      header h1 span {
+        display: none;
+      }
+
+      main {
+        padding: 16px;
+        gap: 16px;
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto auto;
+      }
+      
+      .detail-panel {
+        grid-column: 1 / 2;
+        grid-row: 3 / 4;
+      }
+      
+      .graph-card {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+      }
+
+      .side-panel {
+        grid-column: 1 / 2;
+        grid-row: 2 / 3;
+        max-height: 400px;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .evaluation-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>[KSMS APPS] 교우관계 분석 시스템<span style="font-size: 14px; font-weight: 500; color: #CCCCCC; margin-left: 12px;">(설문 기반 관계망 시각화)</span></h1>
+    </div>
+    <button class="fullscreen-btn" id="fullscreenBtn" title="전체화면">⛶</button>
+  </header>
+
+  <main>
+    <section class="detail-panel">
+        <div class="panel-section">
+            <div class="panel-title">👤 선택된 학생 상세 정보</div>
+            <div id="studentInfoCard" class="profile-card">
+              <p>학생을 클릭하면 상세 정보가 표시됩니다.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="graph-card">
+      <div class="graph-header">📊 교우관계 네트워크</div>
+      <div class="graph-body"><div id="network"></div></div>
+    </section>
+
+    <aside class="side-panel">
+      <div class="panel-section">
+        <div class="panel-title">📈 통계</div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-icon">👥</span>
+            <div class="stat-value" id="totalStudents">0</div>
+            <div class="stat-label">전체 학생</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">🔗</span>
+            <div class="stat-value" id="totalRelations">0</div>
+            <div class="stat-label">관계 수</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">✅</span>
+            <div class="stat-value" id="positiveRelations">0</div>
+            <div class="stat-label">긍정 관계</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">⚠️</span>
+            <div class="stat-value" id="negativeRelations">0</div>
+            <div class="stat-label">부정 관계</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">🔍 필터</div>
+        <div class="filter-grid">
+          <label><input type="checkbox" id="showMale" checked> 남학생 표시</label>
+          <label><input type="checkbox" id="showFemale" checked> 여학생 표시</label>
+          <label><input type="checkbox" id="showPositive" checked> 긍정 관계</label>
+          <label><input type="checkbox" id="showNegative" checked> 부정 관계</label>
+        </div>
+        <button class="btn primary" id="applyFilters">✨ 적용하기</button>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">💾 데이터 관리</div>
+        <button class="btn secondary" id="downloadSample" style="margin-bottom: 10px;">📥 샘플 CSV 다운로드</button>
+        <label for="fileUpload" class="btn secondary" style="cursor:pointer;">📤 CSV 업로드</label>
+        <input type="file" id="fileUpload" accept=".csv" />
+        <div id="uploadStatus"></div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">📥 내보내기</div>
+        <button class="btn secondary" id="exportPng">💾 PNG로 저장</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script>
+    let rawEdges = [];
+    let nodesMap = new Map();
+    let network = null;
+    let currentSelectedNodeId = null; 
+    // **수정: 필터링과 무관하게 고정될 전체 통계를 저장하는 객체**
+    let totalStats = {
+      totalStudents: 0,
+      totalRelations: 0,
+      positiveRelations: 0,
+      negativeRelations: 0
+    };
+
+    const container = document.getElementById('network');
+    const studentInfoCard = document.getElementById('studentInfoCard');
+    const uploadStatus = document.getElementById('uploadStatus');
+
+    // CSV 파싱 함수 (쉼표가 포함된 셀 처리)
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      
+      return result;
+    }
+
+    function sentimentFromCode(code) {
+      const c = String(code).trim();
+      if (c === '1') return 'positive';
+      if (c === '3') return 'negative';
+      return 'neutral';
+    }
+
+    function edgeColor(sentiment) {
+      if (sentiment === 'positive') return '#34D399';
+      if (sentiment === 'negative') return '#F87171';
+      return '#9CA3AF';
+    }
+
+    function nodeColor(gender) {
+      return (gender === '남' || gender === 'M' || gender === '남자') ? '#5B8DEE' : '#E879B9';
+    }
+
+    function rebuildGraph() {
+      const showMale = document.getElementById('showMale').checked;
+      const showFemale = document.getElementById('showFemale').checked;
+      const showPositive = document.getElementById('showPositive').checked;
+      const showNegative = document.getElementById('showNegative').checked;
+
+      // 노드 필터링
+      const filteredNodes = Array.from(nodesMap.values()).filter(node => {
+        const isMale = node.gender === '남' || node.gender === 'M' || node.gender === '남자';
+        if (isMale && !showMale) return false;
+        if (!isMale && !showFemale) return false;
+        return true;
+      });
+
+      const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+
+      // 엣지 필터링
+      const filteredEdges = rawEdges.filter(e => {
+        if (!filteredNodeIds.has(e.fromId) || !filteredNodeIds.has(e.toId)) return false;
+        if (e.sentiment === 'positive' && !showPositive) return false;
+        if (e.sentiment === 'negative' && !showNegative) return false;
+        return true;
+      });
+
+      // 각 노드의 연결 수 계산
+      const connectionCount = new Map();
+      filteredNodes.forEach(node => connectionCount.set(node.id, 0));
+      
+      filteredEdges.forEach(edge => {
+        connectionCount.set(edge.fromId, (connectionCount.get(edge.fromId) || 0) + 1);
+        connectionCount.set(edge.toId, (connectionCount.get(edge.toId) || 0) + 1);
+      });
+
+      // 노드 크기 계산 (연결 수에 비례) - 최대 연결수는 80, 최소 연결수는 20
+      const connectionCounts = Array.from(connectionCount.values());
+      const maxConnections = Math.max(...connectionCounts, 1);
+      const minConnections = Math.min(...connectionCounts, 0);
+      
+      const minSize = 20;
+      const maxSize = 80;
+
+      const nodes = new vis.DataSet(filteredNodes.map(node => {
+        const connections = connectionCount.get(node.id) || 0;
+        
+        // 최소 연결수와 최대 연결수 사이에서 선형 비례로 크기 결정
+        let nodeSize;
+        if (maxConnections === minConnections) {
+          nodeSize = (minSize + maxSize) / 2; // 모두 같은 연결수면 중간 크기
+        } else {
+          nodeSize = minSize + ((connections - minConnections) / (maxConnections - minConnections)) * (maxSize - minSize);
+        }
+
+        const originalColor = nodeColor(node.gender);
+        
+        return {
+          id: node.id,
+          label: node.label,
+          gender: node.gender, // 필터링을 위해 원래 gender 값 저장
+          shape: 'circle',
+          color: {
+            background: originalColor,
+            border: originalColor,
+            highlight: {
+              background: originalColor,
+              border: '#FFD700' // **수정: 선택 하이라이트 테두리 색상**
+            },
+            hover: {
+              background: originalColor,
+              border: '#FFFFFF'
+            }
+          },
+          font: {
+            color: '#FFFFFF',
+            size: Math.max(11, Math.min(18, nodeSize / 4.5)),
+            face: 'Inter',
+            bold: { color: '#FFFFFF' }
+          },
+          size: nodeSize,
+          borderWidth: 3,
+          borderWidthSelected: 6, // **수정: 선택된 노드의 테두리 두께**
+          shadow: {
+            enabled: true,
+            color: 'rgba(0,0,0,0.15)',
+            size: 12,
+            x: 3,
+            y: 3
+          },
+          scaling: {
+            min: 20,
+            max: 80,
+            label: {
+              enabled: true,
+              min: 11,
+              max: 18
+            }
+          },
+          originalColor: originalColor // 초기 색상 저장
+        };
+      }));
+
+      // 양방향 관계 감지를 위한 맵 생성
+      const relationMap = new Map();
+      filteredEdges.forEach(e => {
+        const key = `${e.fromId}-${e.toId}`;
+        relationMap.set(key, e.sentiment);
+      });
+
+      // 엣지 생성 (양방향 관계 처리)
+      const processedPairs = new Set();
+      const edges = new vis.DataSet(filteredEdges.map(e => {
+        const pairKey = [e.fromId, e.toId].sort().join('-');
+        
+        // 이미 처리된 쌍이면 스킵
+        if (processedPairs.has(pairKey)) {
+          return null;
+        }
+        processedPairs.add(pairKey);
+
+        const reverseKey = `${e.toId}-${e.fromId}`;
+        const reverseSentiment = relationMap.get(reverseKey);
+
+        const edgeConfig = {
+          from: e.fromId,
+          to: e.toId,
+          width: 2.5,
+          smooth: {
+            type: 'continuous'
+          }
+        };
+
+        // 양방향 관계가 있는 경우
+        if (reverseSentiment) {
+          if (e.sentiment === reverseSentiment) {
+            // 같은 감정의 양방향 - 양방향 화살표
+            edgeConfig.arrows = {
+              to: { enabled: true, scaleFactor: 0.8 },
+              from: { enabled: true, scaleFactor: 0.8 }
+            };
+            const color = edgeColor(e.sentiment);
+            edgeConfig.color = {
+              color: color,
+              highlight: color
+            };
+            edgeConfig.originalColor = { color: color, highlight: color };
+          } else {
+            // 다른 감정 - 두 개의 곡선 엣지로 분리
+            const color1 = edgeColor(e.sentiment);
+            const color2 = edgeColor(reverseSentiment);
+            return [
+              {
+                ...edgeConfig,
+                id: `${e.fromId}-${e.toId}-forward`,
+                arrows: {
+                  to: { enabled: true, scaleFactor: 0.8 }
+                },
+                color: {
+                  color: color1,
+                  highlight: color1
+                },
+                originalColor: { color: color1, highlight: color1 },
+                smooth: {
+                  type: 'curvedCW',
+                  roundness: 0.2
+                }
+              },
+              {
+                from: e.toId,
+                to: e.fromId,
+                id: `${e.fromId}-${e.toId}-reverse`,
+                arrows: {
+                  to: { enabled: true, scaleFactor: 0.8 }
+                },
+                color: {
+                  color: color2,
+                  highlight: color2
+                },
+                originalColor: { color: color2, highlight: color2 },
+                width: 2.5,
+                smooth: {
+                  type: 'curvedCW',
+                  roundness: 0.2
+                }
+              }
+            ];
+          }
+        } else {
+          // 단방향 관계
+          edgeConfig.arrows = {
+            to: { enabled: true, scaleFactor: 0.8 }
+          };
+          const color = edgeColor(e.sentiment);
+          edgeConfig.color = {
+            color: color,
+            highlight: color
+          };
+          edgeConfig.originalColor = { color: color, highlight: color };
+        }
+
+        return edgeConfig;
+      }).filter(e => e !== null).flat());
+
+      // **수정: 통계 업데이트 로직 제거. 통계는 loadFromCSV에서 고정됨.**
+      // updateStatistics(filteredNodes, filteredEdges); // <--- 삭제됨
+
+      const data = { nodes, edges };
+      const options = {
+        physics: {
+          enabled: true,
+          stabilization: {
+            enabled: true,
+            iterations: 200,
+            fit: true
+          },
+          barnesHut: {
+            gravitationalConstant: -5000,
+            centralGravity: 0.1,
+            springLength: 180,
+            springConstant: 0.01,
+            damping: 0.5,
+            avoidOverlap: 0.3
+          }
+        },
+        interaction: {
+          hover: true,
+          dragNodes: true,
+          dragView: true,
+          zoomView: true,
+          tooltipDelay: 100,
+          hoverConnectedEdges: true,
+          navigationButtons: false,
+          keyboard: {
+            enabled: false
+          }
+        },
+        nodes: {
+          shape: 'circle',
+          borderWidthSelected: 6,
+          chosen: {
+            node: function(values, id, selected, hovering) {
+              // 선택된 노드의 테두리 색상 및 두께 설정
+              if (selected) {
+                values.borderWidth = 6;
+                values.borderColor = '#FFD700'; // 노란색 테두리
+                values.shadowSize = 20;
+                values.shadowX = 4;
+                values.shadowY = 4;
+              } else {
+                // 선택이 해제되거나 다른 노드가 선택될 때 원래 색상으로 돌아가도록 처리
+                const nodeData = data.nodes.get(id);
+                if (nodeData && nodeData.originalColor) {
+                  values.borderColor = nodeData.originalColor;
+                }
+              }
+            }
+          }
+        },
+        edges: {
+          smooth: {
+            enabled: true,
+            type: 'continuous',
+            roundness: 0.5
+          },
+          hoverWidth: 1.5,
+          selectionWidth: 2
+        }
+      };
+
+      if (network) network.destroy();
+      
+      // 로딩 표시
+      const graphBody = document.querySelector('.graph-body');
+      const loadingOverlay = document.createElement('div');
+      loadingOverlay.className = 'loading-overlay';
+      loadingOverlay.innerHTML = '<div class="loading-spinner"></div>';
+      graphBody.appendChild(loadingOverlay);
+      
+      network = new vis.Network(container, data, options);
+
+      network.on("click", function(params) {
+        if (params.nodes.length > 0) {
+          const nodeId = params.nodes[0];
+          currentSelectedNodeId = nodeId;
+          showStudentDetails(nodeId, filteredEdges);
+          highlightSelectedNode(nodeId, data.edges, data.nodes); // data.nodes 전달
+        } else {
+          currentSelectedNodeId = null;
+          resetEdgeColors(data.edges);
+          resetNodeColors(data.nodes); // 노드 색상 리셋
+          studentInfoCard.innerHTML = '<p>학생을 클릭하면 상세 정보가 표시됩니다.</p>';
+        }
+      });
+
+      network.on("dragStart", function(params) {
+        if (params.nodes.length > 0) {
+          network.setOptions({
+            physics: {
+              enabled: true,
+              barnesHut: {
+                gravitationalConstant: -3000,
+                centralGravity: 0.05,
+                springLength: 180,
+                springConstant: 0.008,
+                damping: 0.5,
+                avoidOverlap: 0.2
+              }
+            }
+          });
+        }
+      });
+
+      network.on("dragEnd", function(params) {
+        if (params.nodes.length > 0) {
+          network.setOptions({
+            physics: {
+              enabled: false
+            }
+          });
+        }
+      });
+
+      network.once("stabilizationIterationsDone", function() {
+        network.setOptions({
+          physics: {
+            enabled: false
+          }
+        });
+        
+        // 로딩 오버레이 제거
+        const overlay = document.querySelector('.loading-overlay');
+        if (overlay) {
+          overlay.style.opacity = '0';
+          setTimeout(() => overlay.remove(), 300);
+        }
+
+        // 그래프 재구축 후 선택된 노드가 있다면 하이라이트 유지
+        if (currentSelectedNodeId) {
+            highlightSelectedNode(currentSelectedNodeId, data.edges, data.nodes);
+        }
+      });
+    }
+
+    // **수정: 통계 객체를 인수로 받도록 변경**
+    function updateStatistics(statsObject) {
+      // 이제 필터링과 무관하게 고정된 통계 객체의 값을 사용합니다.
+      animateValue('totalStudents', 0, statsObject.totalStudents, 600);
+      animateValue('totalRelations', 0, statsObject.totalRelations, 600);
+      animateValue('positiveRelations', 0, statsObject.positiveRelations, 600);
+      animateValue('negativeRelations', 0, statsObject.negativeRelations, 600);
+    }
+
+    function animateValue(id, start, end, duration) {
+      const element = document.getElementById(id);
+      const range = end - start;
+      const increment = end > start ? 1 : -1;
+      const stepTime = Math.abs(Math.floor(duration / range));
+      let current = start;
+      
+      const timer = setInterval(() => {
+        current += increment;
+        element.textContent = current;
+        if (current === end) {
+          clearInterval(timer);
+        }
+      }, stepTime);
+    }
+
+    // 노드 하이라이트 및 비연결 노드 회색 처리
+    function highlightSelectedNode(selectedId, edgesDataSet, nodesDataSet) {
+      const allEdges = edgesDataSet.get();
+      const connectedNodeIds = new Set([selectedId]);
+      
+      // 엣지 하이라이트 및 연결된 노드 ID 수집
+      allEdges.forEach(edge => {
+        const isConnected = edge.from === selectedId || edge.to === selectedId;
+        
+        if (isConnected) {
+          edgesDataSet.update({
+            id: edge.id,
+            color: edge.originalColor || edge.color,
+            width: 3.5 // 선택된 노드와 연결된 엣지 굵게 (6px 테두리 두께와 시각적 균형)
+          });
+          connectedNodeIds.add(edge.from);
+          connectedNodeIds.add(edge.to);
+        } else {
+          edgesDataSet.update({
+            id: edge.id,
+            color: { color: '#D1D5DB', highlight: '#D1D5DB' },
+            width: 1.5 // 연결되지 않은 엣지 회색 & 얇게
+          });
+        }
+      });
+
+      // 노드 색상 업데이트 (비연결 노드 회색 처리)
+      const allNodes = nodesDataSet.get();
+      const nodeUpdates = [];
+
+      allNodes.forEach(node => {
+        if (node.id === selectedId) {
+          // 선택된 노드는 기본 색상을 유지 (vis.js가 chosen 옵션으로 노란 테두리 처리)
+          nodeUpdates.push({
+            id: node.id,
+            color: {
+                background: node.originalColor,
+                border: node.originalColor,
+                highlight: { background: node.originalColor, border: '#FFD700' },
+                hover: { background: node.originalColor, border: '#FFFFFF' }
+            },
+            font: { color: '#FFFFFF', bold: { color: '#FFFFFF' } }
+          });
+        } else if (!connectedNodeIds.has(node.id)) {
+          // 비연결 노드 회색 처리
+          const gray = '#D1D5DB';
+          nodeUpdates.push({
+            id: node.id,
+            color: {
+              background: gray,
+              border: gray,
+              highlight: { background: gray, border: '#9CA3AF' },
+              hover: { background: gray, border: '#FFFFFF' }
+            },
+            font: { color: '#6B7280', bold: { color: '#6B7280' } }
+          });
+        } else {
+          // 연결된 다른 노드는 원래 색상 유지
+          nodeUpdates.push({
+            id: node.id,
+            color: {
+                background: node.originalColor,
+                border: node.originalColor,
+                highlight: { background: node.originalColor, border: '#FFD700' },
+                hover: { background: node.originalColor, border: '#FFFFFF' }
+            },
+            font: { color: '#FFFFFF', bold: { color: '#FFFFFF' } }
+          });
+        }
+      });
+      nodesDataSet.update(nodeUpdates);
+    }
+
+    // 노드 색상 리셋 함수
+    function resetNodeColors(nodesDataSet) {
+        const allNodes = nodesDataSet.get();
+        const nodeUpdates = allNodes.map(node => ({
+            id: node.id,
+            color: {
+                background: node.originalColor,
+                border: node.originalColor,
+                highlight: { background: node.originalColor, border: '#FFD700' },
+                hover: { background: node.originalColor, border: '#FFFFFF' }
+            },
+            font: { color: '#FFFFFF', bold: { color: '#FFFFFF' } }
+        }));
+        nodesDataSet.update(nodeUpdates);
+    }
+
+    function resetEdgeColors(edgesDataSet) {
+      const allEdges = edgesDataSet.get();
+      
+      allEdges.forEach(edge => {
+        if (edge.originalColor) {
+          edgesDataSet.update({
+            id: edge.id,
+            color: edge.originalColor,
+            width: 2.5
+          });
+        }
+      });
+    }
+
+    function showStudentDetails(id, edges) {
+      const student = nodesMap.get(id);
+      if (!student) return;
+      
+      const outgoing = edges.filter(e => e.fromId === id);
+      const incoming = edges.filter(e => e.toId === id);
+      const totalConnections = outgoing.length + incoming.length;
+      
+      const genderBadgeClass = (student.gender === '남' || student.gender === 'M' || student.gender === '남자') ? 'male' : 'female';
+      
+      const outgoingList = outgoing.map(e => {
+        const other = nodesMap.get(e.toId);
+        const otherName = other?.label || '익명';
+        const arrowColor = e.sentiment === 'positive' ? '#34D399' : '#F87171';
+        const sentimentText = e.sentiment === 'positive' ? '긍정' : '부정';
+        return `<span style="color: ${arrowColor}; font-weight: 700;">→</span> ${otherName} <span style="color: ${arrowColor}; font-size: 11px;">(${sentimentText})</span>`;
+      });
+      
+      const incomingList = incoming.map(e => {
+        const other = nodesMap.get(e.fromId);
+        const otherName = other?.label || '익명';
+        const arrowColor = e.sentiment === 'positive' ? '#34D399' : '#F87171';
+        const sentimentText = e.sentiment === 'positive' ? '긍정' : '부정';
+        return `<span style="color: ${arrowColor}; font-weight: 700;">←</span> ${otherName} <span style="color: ${arrowColor}; font-size: 11px;">(${sentimentText})</span>`;
+      });
+
+      // studentInfoCard에 내용 출력
+      studentInfoCard.innerHTML = `
+        <h3>
+          ${student.label}
+          <span class="gender-badge ${genderBadgeClass}">${student.gender}</span>
+          <span class="connection-count-badge">전체 연결수 : ${totalConnections}</span>
+        </h3>
+        
+        <div class="evaluation-grid">
+          <div class="evaluation-card">
+            <div class="evaluation-title">
+              내가 평가한 학생
+              <span class="evaluation-count">${outgoing.length}</span>
+            </div>
+            <ul>${outgoingList.length > 0 ? outgoingList.map(f => `<li>${f}</li>`).join('') : '<li style="color: #9CA3AF;">없음</li>'}</ul>
+          </div>
+          
+          <div class="evaluation-card">
+            <div class="evaluation-title">
+              나를 평가한 학생
+              <span class="evaluation-count">${incoming.length}</span>
+            </div>
+            <ul>${incomingList.length > 0 ? incomingList.map(f => `<li>${f}</li>`).join('') : '<li style="color: #9CA3AF;">없음</li>'}</ul>
+          </div>
+        </div>
+      `;
+    }
+
+    function loadFromCSV(text) {
+      try {
+        const lines = text.trim().split('\n');
+        if (lines.length < 2) {
+          throw new Error('CSV 파일에 데이터가 부족합니다.');
+        }
+
+        const header = parseCSVLine(lines[0]);
+        const studentNames = header.slice(3); // 학번, 성명, 성별 이후의 이름들
+        
+        rawEdges = [];
+        nodesMap.clear();
+        currentSelectedNodeId = null; // 데이터 로드 시 선택된 노드 리셋
+
+        // 1. 모든 학생을 nodesMap에 추가
+        for (let i = 1; i < lines.length; i++) {
+          const row = parseCSVLine(lines[i]);
+          if (row.length < 3) continue;
+          
+          const id = row[0].trim();
+          const name = row[1].trim();
+          const gender = row[2].trim();
+          
+          if (id && name) {
+            nodesMap.set(id, { id, label: name, gender });
+          }
+        }
+
+        // 2. 이름으로 ID를 찾기 위한 맵 생성
+        const nameToIdMap = new Map();
+        nodesMap.forEach(node => {
+          nameToIdMap.set(node.label, node.id);
+        });
+
+        // 3. 관계 데이터 처리 (rawEdges 생성)
+        for (let i = 1; i < lines.length; i++) {
+          const row = parseCSVLine(lines[i]);
+          if (row.length < 3) continue;
+          
+          const id = row[0].trim();
+          const name = row[1].trim();
+
+          for (let j = 3; j < row.length; j++) {
+            const targetName = studentNames[j - 3];
+            const targetId = nameToIdMap.get(targetName);
+            
+            // 자기 자신에 대한 평가는 무시
+            if (name === targetName) continue;
+            
+            const sentiment = sentimentFromCode(row[j]);
+            
+            // neutral(보통)은 무시
+            if (sentiment !== 'neutral' && targetId) {
+              rawEdges.push({ fromId: id, toId: targetId, sentiment });
+            }
+          }
+        }
+
+        // **수정: 전체 통계 계산 및 저장 (고정값)**
+        const allNodes = Array.from(nodesMap.values());
+        const totalPositive = rawEdges.filter(e => e.sentiment === 'positive').length;
+        const totalNegative = rawEdges.filter(e => e.sentiment === 'negative').length;
+
+        totalStats.totalStudents = allNodes.length;
+        totalStats.totalRelations = rawEdges.length;
+        totalStats.positiveRelations = totalPositive;
+        totalStats.negativeRelations = totalNegative;
+        
+        // **수정: 고정된 통계로 초기 화면 업데이트**
+        updateStatistics(totalStats); 
+
+        uploadStatus.innerHTML = '<div class="success-message">✓ CSV 파일이 성공적으로 로드되었습니다.</div>';
+        setTimeout(() => { uploadStatus.innerHTML = ''; }, 3000);
+        
+        rebuildGraph();
+      } catch (error) {
+        uploadStatus.innerHTML = `<div class="error-message">✗ 오류: ${error.message}</div>`;
+        console.error('CSV 로드 오류:', error);
+      }
+    }
+
+    document.getElementById('applyFilters').addEventListener('click', rebuildGraph);
+    
+    // 전체화면 토글 기능
+    document.getElementById('fullscreenBtn').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        // 전체화면으로 전환
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error(`전체화면 전환 오류: ${err.message}`);
+        });
+      } else {
+        // 전체화면 해제
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    });
+
+    // 전체화면 상태 변경 시 아이콘 업데이트
+    document.addEventListener('fullscreenchange', () => {
+      const btn = document.getElementById('fullscreenBtn');
+      if (document.fullscreenElement) {
+        btn.textContent = '⛶'; // 전체화면 해제 아이콘
+        btn.title = '전체화면 해제';
+      } else {
+        btn.textContent = '⛶'; // 전체화면 아이콘
+        btn.title = '전체화면';
+      }
+    });
+    
+    document.getElementById('downloadSample').addEventListener('click', () => {
+      const sampleCSV = `학번,성명,성별,학생1,학생2,학생3,학생4,학생5,학생6,학생7,학생8
+3301,학생1,여,2,2,2,3,1,1,1,1
+3302,학생2,여,1,2,2,3,2,1,2,1
+3303,학생3,여,2,2,2,2,1,1,2,2
+3304,학생4,여,3,2,2,2,2,2,2,3
+3305,학생5,남,3,1,1,1,2,2,2,3
+3306,학생6,남,2,2,2,2,2,2,2,2
+3307,학생7,남,2,1,2,3,2,2,2,2
+3308,학생8,남,1,2,2,3,1,1,2,2`;
+      
+      const blob = new Blob(['\uFEFF' + sampleCSV], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = '샘플_CSV_데이터.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+    
+    document.getElementById('fileUpload').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => loadFromCSV(event.target.result);
+      reader.onerror = () => {
+        uploadStatus.innerHTML = '<div class="error-message">✗ 파일을 읽을 수 없습니다.</div>';
+      };
+      reader.readAsText(file, 'UTF-8');
+    });
+
+    document.getElementById('exportPng').addEventListener('click', () => {
+      if (!network) return;
+      
+      const sourceCanvas = network.canvas.frame.canvas;
+      const sourceWidth = sourceCanvas.width;
+      const sourceHeight = sourceCanvas.height;
+      
+      // 3:2 비율 계산
+      const targetRatio = 3 / 2;
+      let targetWidth, targetHeight;
+      
+      const currentRatio = sourceWidth / sourceHeight;
+      
+      if (currentRatio > targetRatio) {
+        // 현재 이미지가 더 넓음 - 높이를 기준으로 계산
+        targetHeight = sourceHeight;
+        targetWidth = targetHeight * targetRatio;
+      } else {
+        // 현재 이미지가 더 높음 - 너비를 기준으로 계산
+        targetWidth = sourceWidth;
+        targetHeight = targetWidth / targetRatio;
+      }
+      
+      // 새 캔버스 생성 (3:2 비율)
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = targetWidth;
+      exportCanvas.height = targetHeight;
+      const ctx = exportCanvas.getContext('2d');
+      
+      // 투명 배경 (아무것도 그리지 않으면 자동으로 투명)
+      // 원본 이미지를 중앙에 배치
+      const offsetX = (targetWidth - sourceWidth) / 2;
+      const offsetY = (targetHeight - sourceHeight) / 2;
+      
+      ctx.drawImage(sourceCanvas, offsetX, offsetY);
+      
+      // 다운로드
+      const link = document.createElement('a');
+      link.href = exportCanvas.toDataURL('image/png');
+      link.download = '교우관계도_PRO+.png';
+      link.click();
+    });
+
+    // 초기 샘플 데이터 로드
+    const sample = `학번,성명,성별,학생1,학생2,학생3,학생4,학생5,학생6,학생7,학생8
+3301,학생1,여,2,2,2,3,1,1,1,1
+3302,학생2,여,1,2,2,3,2,1,2,1
+3303,학생3,여,2,2,2,2,1,1,2,2
+3304,학생4,여,3,2,2,2,2,2,2,3
+3305,학생5,남,3,1,1,1,2,2,2,3
+3306,학생6,남,2,2,2,2,2,2,2,2
+3307,학생7,남,2,1,2,3,2,2,2,2
+3308,학생8,남,1,2,2,3,1,1,2,2`;
+    loadFromCSV(sample);
+  </script>
+</body>
+</html>
